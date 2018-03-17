@@ -10,17 +10,14 @@
 # <http://creativecommons.org/publicdomain/zero/1.0/>.
 
 import aiohttp
-import async_timeout
-import asyncio
 from html2text import HTML2Text
-import json
+import logging
 from textwrap import TextWrapper
 
-api_stream = 'https://www.patreon.com/api/stream'
-# test
-#webhook = 'https://discordapp.com/api/webhooks/NO_KEY_FOR_YOU'
-# prod
-webhook = 'https://discordapp.com/api/webhooks/NO_KEY_FOR_YOU'
+LOG = logging.getLogger(__name__)
+
+STREAM_URL = 'https://www.patreon.com/api/stream'
+LOGO_URL = 'https://c5.patreon.com/external/logo/downloads_logomark_color_on_coral.png'
 
 def mangleBody(text):
   h2 = HTML2Text()
@@ -55,7 +52,7 @@ def convertPost(post, author):
     },
     'footer': {
       'text': 'Patreon',
-      'icon_url': 'https://c5.patreon.com/external/logo/downloads_logomark_color_on_coral.png',
+      'icon_url': LOGO_URL,
     },
   }
 
@@ -66,9 +63,7 @@ def convertPost(post, author):
       'width':  post['attributes']['image']['width'],
     }
 
-  return {
-    'embeds': [embed],
-  }
+  return embed
 
 def authorForPost(post, included):
   return next(
@@ -81,52 +76,44 @@ def params(creatorPosts = True):
   return {
     'include': 'user',
     'fields[post]': ','.join([
-      'content',
-      'embed',
-      'image',
-      'published_at',
-      'post_type',
       'title',
+      'published_at',
+      #'post_type',
+      'content',
+      'image',
+      #'embed',
       'url',
     ]),
     'fields[user]': ','.join([
-      'image_url',
       'full_name',
+      'image_url',
       'url',
     ]),
-    'page[cursor]': 'null',
     'filter[creator_id]': 136449,
-    'filter[is_by_creator]': ('true' if creatorPosts else 'false'),
+    'filter[is_by_creator]': 'true' if creatorPosts else 'false',
     'json-api-use-default-includes': 'false',
     'json-api-version': '1.0',
   }
 
-cookies = {
-  'session_id': 'NO_KEY_FOR_YOU',
-}
 
-async def main():
-  async with aiohttp.ClientSession(cookies=cookies) as session:
-    async with async_timeout.timeout(10):
-      resp = await session.get(api_stream, params=params(creatorPosts=False))
-    print(str(resp.url))
+class PatreonSource(object):
+  def __init__(self, discord=None):
+    self.discord = discord
+    self.cookies = {}
 
-    body = await resp.json(content_type='application/vnd.api+json')
-
-    post = body['data'][8]
-    user = authorForPost(post, body['included'])
-    message = convertPost(post, user)
-
-    print(json.dumps(message, indent=2))
-
-    print('*** sending webhook')
-    async with async_timeout.timeout(10):
-      resp = await session.post(webhook, json=message)
-    print(resp.url)
-    print(resp.status)
-    print(await resp.text())
+  def configure(self, config):
+    self.cookies['session_id'] = config['patreon.session_id']
 
 
+  async def poll(self):
+    async with aiohttp.ClientSession(cookies=self.cookies) as session:
+      resp = await session.get(STREAM_URL, params=params(creatorPosts=False))
+      print(str(resp.url))
 
-loop = asyncio.get_event_loop()
-loop.run_until_complete(main())
+      body = await resp.json(content_type='application/vnd.api+json')
+
+      post = body['data'][0]
+      user = authorForPost(post, body['included'])
+      message = convertPost(post, user)
+
+      await self.discord.send(embed=message)

@@ -1,0 +1,6 @@
+# Python build output
+__pycache__/
+*.pyc
+
+# config files for testing
+/*.cfg
