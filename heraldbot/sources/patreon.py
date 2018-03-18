@@ -10,6 +10,7 @@
 # <http://creativecommons.org/publicdomain/zero/1.0/>.
 
 import aiohttp
+import asyncio
 from html2text import HTML2Text
 import logging
 from textwrap import TextWrapper
@@ -96,16 +97,37 @@ def params(creatorPosts = True):
   }
 
 
-class PatreonSource(object):
-  def __init__(self, discord=None):
+class Source(object):
+  cookies = {}
+  interval = 5 * 60
+
+  def __init__(self, name=None, discord=None):
+    self.name = name
     self.discord = discord
-    self.cookies = {}
 
   def configure(self, config):
     self.cookies['session_id'] = config['patreon.session_id']
 
+    if 'interval' in config:
+      self.interval = int(config['interval'])
+
+  async def run(self):
+    LOG.info(
+      "Patreon poller starting for %s, interval %d",
+      self.name, self.interval
+    )
+
+    while True:
+      # the sleep runs concurrently with the polling action
+      # which makes the polling interval much closer to nominal
+      # awaiting the poll ensures that invocations don't overlap
+      sleep = asyncio.sleep(self.interval)
+      await self.poll()
+      await sleep
 
   async def poll(self):
+    LOG.debug("polling Patreon (%s) for new posts", self.name)
+
     async with aiohttp.ClientSession(cookies=self.cookies) as session:
       resp = await session.get(STREAM_URL, params=params(creatorPosts=False))
       print(str(resp.url))

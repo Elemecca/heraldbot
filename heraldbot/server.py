@@ -10,11 +10,11 @@
 # <http://creativecommons.org/publicdomain/zero/1.0/>.
 
 import asyncio
+from importlib import import_module
 import logging
 import sys
 
 from .discord import DiscordSender
-from .sources.patreon import PatreonSource
 
 LOG = logging.getLogger(__name__)
 
@@ -31,22 +31,38 @@ class BotServer(object):
     self.config = config
 
     if not config.sections():
-      LOG.error("no provider sections in config; shutting down")
+      LOG.error("no source sections in config; shutting down")
       sys.exit(1)
 
-    section = config['patreon']
+    sources = []
+    for name in config.sections():
+      section = config[name]
 
-    discord = DiscordSender()
-    discord.configure(section)
+      mod_name = section['source'] if 'source' in section else name
+      try:
+        mod = import_module('heraldbot.sources.' + mod_name)
+      except ImportError:
+        LOG.error(
+          "invalid source '%s'; skipping section '%s'",
+          mod_name, name
+        )
+        continue
 
-    LOG.info("hello!")
-    self.source = PatreonSource(discord=discord)
-    self.source.configure(section)
-    LOG.info("goodbye!")
+      discord = DiscordSender()
+      discord.configure(section)
+
+      source = mod.Source(name=name, discord=discord)
+      source.configure(section)
+
+      self.loop.create_task(source.run())
+      sources.append(source)
+
+    if not sources:
+      LOG.error("no valid source configurations; shutting down")
+      sys.exit(1)
 
   def run(self):
-    #self.loop.run_forever()
-    self.loop.run_until_complete(self.source.poll())
+    self.loop.run_forever()
 
   def stop(self):
     self.loop.stop()
