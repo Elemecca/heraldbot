@@ -19,7 +19,7 @@ from .server import BotServer
 
 LOG = logging.getLogger(__name__)
 
-def main(argv):
+def main():
   parser = argparse.ArgumentParser(
     description = "Discord notification bot",
   )
@@ -35,7 +35,7 @@ def main(argv):
     help = 'path to the configuration file',
   )
 
-  args = parser.parse_args(argv[1:])
+  args = parser.parse_args()
 
   logLevel = getattr(logging, args.log_level.upper())
   if not isinstance(logLevel, int):

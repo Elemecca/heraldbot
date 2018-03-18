@@ -1,6 +1,10 @@
-# Python build output
+# Python cache
 __pycache__/
 *.pyc
+
+# Python build output
+/heraldbot.egg-info/
+/.virtualenv/
 
 # config files for testing
 /*.cfg

@@ -1,7 +1,0 @@
-#!/usr/bin/env python3
-# vim:ft=python:
-
-import sys
-import heraldbot.cli
-
-heraldbot.cli.main(sys.argv)
