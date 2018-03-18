@@ -25,14 +25,26 @@ def main(argv):
   )
 
   parser.add_argument(
+    '-l', '--log-level', metavar = 'level', default = 'info',
+    help = 'the log output level for the console',
+    choices = ['critical', 'error', 'warning', 'info', 'debug'],
+  )
+
+  parser.add_argument(
     '-c', '--config', metavar = 'file', required = True,
     help = 'path to the configuration file',
   )
 
   args = parser.parse_args(argv[1:])
 
+  logLevel = getattr(logging, args.log_level.upper())
+  if not isinstance(logLevel, int):
+    print('invalid log level', file=sys.stderr)
+    sys.exit(1)
+
   logging.basicConfig(
-    level = logging.DEBUG,
+    level = logLevel,
+    stream = sys.stderr,
     format = "%(asctime)s [%(name)s] %(levelname)s: %(message)s",
   )
 
