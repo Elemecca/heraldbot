@@ -11,8 +11,9 @@
 
 import argparse
 import configparser
-import os
 import logging
+import os
+import sys
 
 from .server import BotServer
 
@@ -24,7 +25,7 @@ def main(argv):
   )
 
   parser.add_argument(
-    '--config', '-c', metavar = 'file',
+    '-c', '--config', metavar = 'file', required = True,
     help = 'path to the configuration file',
   )
 
@@ -35,13 +36,17 @@ def main(argv):
     format = "%(asctime)s [%(name)s] %(levelname)s: %(message)s",
   )
 
-  if args.config is None:
-    script = os.path.abspath(argv[0])
-    args.config = os.path.join(os.path.dirname(script), 'heraldbot.cfg')
-
-  LOG.info("loading config file %s", args.config)
   config = configparser.ConfigParser()
-  config.read(args.config)
+  try:
+    LOG.info("loading config file '%s'", args.config)
+    with open(args.config, 'r') as stream:
+      config.read_file(stream)
+  except OSError as ex:
+    LOG.error('failed to read config: %s', ex.strerror)
+    sys.exit(1)
+  except configparser.Error as ex:
+    LOG.error('error in config: %s', str(ex))
+    sys.exit(1)
 
 
   server = BotServer()
