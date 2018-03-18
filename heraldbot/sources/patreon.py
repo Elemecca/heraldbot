@@ -10,13 +10,15 @@
 # <http://creativecommons.org/publicdomain/zero/1.0/>.
 
 import aiohttp
+import datetime
 from html2text import HTML2Text
 import logging
+import re
 from textwrap import TextWrapper
 
 from heraldbot.source import PollingSource
 
-LOG = logging.getLogger(__name__)
+LOG = logging.getLogger('heraldbot')
 
 STREAM_URL = 'https://www.patreon.com/api/stream'
 LOGO_URL = 'https://c5.patreon.com/external/logo/downloads_logomark_color_on_coral.png'
@@ -67,37 +69,6 @@ def convertPost(post, author):
 
   return embed
 
-def authorForPost(post, included):
-  return next(
-    inc for inc in included
-      if inc['type'] == 'user'
-      and inc['id'] == post['relationships']['user']['data']['id']
-  )
-
-def params(creatorPosts = True):
-  return {
-    'include': 'user',
-    'fields[post]': ','.join([
-      'title',
-      'published_at',
-      #'post_type',
-      'content',
-      'image',
-      #'embed',
-      'url',
-    ]),
-    'fields[user]': ','.join([
-      'full_name',
-      'image_url',
-      'url',
-    ]),
-    'filter[creator_id]': 136449,
-    'filter[is_by_creator]': 'true' if creatorPosts else 'false',
-    'json-api-use-default-includes': 'false',
-    'json-api-version': '1.0',
-  }
-
-
 class Source(PollingSource):
   TYPE = "Patreon"
   cookies = {}
@@ -108,22 +79,60 @@ class Source(PollingSource):
   def configure(self, config):
     super().configure(config)
 
+    self.creator_id = config['patreon.creator_id']
     self.cookies['session_id'] = config['patreon.session_id']
 
 
   async def prepare(self):
-    pass
+    self.http = aiohttp.ClientSession(cookies=self.cookies)
 
 
   async def poll(self):
-    async with aiohttp.ClientSession(cookies=self.cookies) as session:
-      resp = await session.get(STREAM_URL, params=params(creatorPosts=False))
-      print(str(resp.url))
+    await self._poll(creatorPosts=True)
+    await self._poll(creatorPosts=False)
 
-      body = await resp.json(content_type='application/vnd.api+json')
+  async def _poll(self, creatorPosts=True):
+    resp = await self.http.get(STREAM_URL, params={
+      'include': 'user',
+      'fields[post]': ','.join([
+        'title',
+        'published_at',
+        'content',
+        'image',
+        'url',
+      ]),
+      'fields[user]': ','.join([
+        'full_name',
+        'image_url',
+        'url',
+      ]),
+      'filter[creator_id]': self.creator_id,
+      'filter[is_by_creator]': 'true' if creatorPosts else 'false',
+      'json-api-use-default-includes': 'false',
+      'json-api-version': '1.0',
+    })
 
-      post = body['data'][0]
-      user = authorForPost(post, body['included'])
-      message = convertPost(post, user)
+    body = await resp.json(content_type='application/vnd.api+json')
 
-      await self.discord.send(embed=message)
+    for post in body['data']:
+      id = post['id']
+
+      # parse the RFC 3339 / ISO 8601 date string
+      # using regexes to compensate for strptime's shortcomings
+      # by stripping separators and converting 'Z' to '+0000'
+      timestr = post['attributes']['published_at']
+      timestamp = datetime.datetime.strptime(
+        re.sub(r':|-(?=.*T)', '', re.sub(r'Z$', '+0000', timestr)),
+        '%Y%m%dT%H%M%S%z'
+      )
+
+      if await self.should_handle(id, timestamp):
+        user = next(
+          inc for inc in body['included']
+            if inc['type'] == 'user'
+            and inc['id'] == post['relationships']['user']['data']['id']
+        )
+        message = convertPost(post, user)
+
+        await self.discord.send(embed=message)
+        await self.mark_handled(id, timestamp)

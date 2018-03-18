@@ -13,7 +13,7 @@ import aiohttp
 import json
 import logging
 
-LOG = logging.getLogger(__name__)
+LOG = logging.getLogger('heraldbot')
 
 class DiscordSender(object):
   def __init__(self):

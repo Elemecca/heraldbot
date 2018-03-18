@@ -17,7 +17,7 @@ import sys
 
 from .server import BotServer
 
-LOG = logging.getLogger(__name__)
+LOG = logging.getLogger('heraldbot')
 
 def main():
   parser = argparse.ArgumentParser(

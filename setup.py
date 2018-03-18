@@ -19,7 +19,7 @@ setup(
   description='polling notification bot for Discord',
   url='https://github.com/Elemecca/heraldbot',
   license='CC0',
-  python_requires='>=3.6',
+  python_requires='>=3.5',
   entry_points={
     'console_scripts': [
       'heraldbot=heraldbot.cli:main',

@@ -16,12 +16,13 @@ import sys
 
 from .discord import DiscordSender
 
-LOG = logging.getLogger(__name__)
+LOG = logging.getLogger('heraldbot')
 
 
 class BotServer(object):
   loop = None
   source = None
+  exit_status = 0
 
   def __init__(self):
     self.loop = asyncio.get_event_loop()
@@ -62,7 +63,15 @@ class BotServer(object):
       sys.exit(1)
 
   def run(self):
+    self.loop.set_exception_handler(self._error)
     self.loop.run_forever()
+    sys.exit(self.exit_status)
 
-  def stop(self):
+  def _error(self, loop, context):
+    loop.default_exception_handler(context)
+    LOG.error('unhandled exception in coroutine; shutting down')
+    self.stop(status=2)
+
+  def stop(self, status=0):
+    self.exit_status = status
     self.loop.stop()
