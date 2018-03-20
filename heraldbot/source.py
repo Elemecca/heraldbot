@@ -21,12 +21,10 @@ class PollingSource(object):
   redis_url = 'redis://localhost'
   max_age = datetime.timedelta(days=1)
 
-  def __init__(self, name=None, discord=None):
+  def __init__(self, config=None, name=None, discord=None):
     self.name = name
     self.discord = discord
 
-
-  def configure(self, config):
     if 'interval' in config:
       self.interval = int(config['interval'])
 

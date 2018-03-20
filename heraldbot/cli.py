@@ -61,6 +61,5 @@ def main():
     sys.exit(1)
 
 
-  server = BotServer()
-  server.configure(config)
+  server = BotServer(config)
   server.run()

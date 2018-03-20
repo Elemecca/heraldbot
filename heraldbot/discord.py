@@ -16,13 +16,12 @@ import logging
 LOG = logging.getLogger('heraldbot')
 
 class DiscordSender(object):
-  def __init__(self):
+  def __init__(self, config=None, http_con=None):
     self.url = None
     self.body = {
       'wait': True,
     }
 
-  def configure(self, config):
     self.url = config['discord.webhook']
 
     if 'discord.username' in config:
@@ -31,19 +30,23 @@ class DiscordSender(object):
     if 'discord.avatar_url' in config:
       self.body['avatar_url'] = config['discord.avatar_url']
 
+    self.http = aiohttp.ClientSession(
+      connector=http_con,
+      conn_timeout=15,
+      read_timeout=60,
+      raise_for_status=True,
+    )
 
 
   async def send(self, content=None, embed=None):
-    async with aiohttp.ClientSession() as http:
-      body = self.body.copy()
+    body = self.body.copy()
 
-      if content:
-        body['content'] = content
+    if content:
+      body['content'] = content
 
-      if embed:
-        body['embeds'] = [embed]
+    if embed:
+      body['embeds'] = [embed]
 
-      LOG.debug("sending webhook:\n%s", json.dumps(body, indent=2))
+    LOG.debug("sending webhook:\n%s", json.dumps(body, indent=2))
 
-      async with http.post(self.url, json=body) as res:
-        res.raise_for_status()
+    await self.http.post(self.url, json=body)

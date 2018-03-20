@@ -71,25 +71,42 @@ def convertPost(post, author):
 
 class Source(PollingSource):
   TYPE = "Patreon"
-  cookies = {}
 
-  def __init__(self, **kwargs):
-    super().__init__(**kwargs)
-
-  def configure(self, config):
-    super().configure(config)
+  def __init__(self, config=None, http_con=None, **kwargs):
+    super().__init__(config=config, **kwargs)
 
     self.creator_id = config['patreon.creator_id']
-    self.cookies['session_id'] = config['patreon.session_id']
+
+    self.http = aiohttp.ClientSession(
+      connector=http_con,
+      conn_timeout=15,
+      read_timeout=60,
+      raise_for_status=True,
+      cookies={'session_id': config['patreon.session_id']},
+    )
 
 
   async def prepare(self):
-    self.http = aiohttp.ClientSession(cookies=self.cookies)
+    pass
 
 
   async def poll(self):
-    await self._poll(creatorPosts=True)
-    await self._poll(creatorPosts=False)
+    try:
+      await self._poll(creatorPosts=True)
+    except:
+      LOG.exception(
+        "[%s] failed polling %s for creator posts",
+        self.name, self.TYPE
+      )
+
+    try:
+      await self._poll(creatorPosts=False)
+    except:
+      LOG.exception(
+        "[%s] failed polling %s for community posts",
+        self.name, self.TYPE
+      )
+
 
   async def _poll(self, creatorPosts=True):
     resp = await self.http.get(STREAM_URL, params={
