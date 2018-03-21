@@ -14,7 +14,7 @@ import datetime
 from html2text import HTML2Text
 import logging
 import re
-from textwrap import TextWrapper
+import textwrap
 
 from heraldbot.source import PollingSource
 
@@ -36,16 +36,7 @@ def mangleBody(text):
   h2.ignore_links = True
   h2.ignore_images = True
 
-  wrap = TextWrapper()
-  wrap.width = 200
-  wrap.max_lines = 1
-  wrap.replace_whitespace = False
-
-  short = wrap.fill(h2.handle(text))
-  shorter = '\n'.join(short.split('\n')[:3])
-  if shorter != short:
-    shorter = shorter + ' [...]'
-  return shorter
+  return textwrap.shorten(h2.handle(text), width=250)
 
 def convertPost(post, author):
   title = post['attributes']['title']
