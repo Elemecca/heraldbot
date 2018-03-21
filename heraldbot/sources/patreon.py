@@ -103,15 +103,6 @@ class Source(PollingSource):
     await self._login()
 
   async def _login(self):
-    # fetch the login form HTML to get a CSRF token
-    form = await self.http.get(LOGIN_FORM_URL)
-    form_body = await form.text()
-    form_match = re.search(r'csrfSignature\s*=\s*"([^"]+)"', form_body)
-    if not form_match:
-      raise Exception("login form does not contain CSRF token")
-    token = form_match.group(1)
-
-    # submit the login request - will raise on failure
     await self.http.post(
       LOGIN_URL,
       params={
@@ -119,7 +110,6 @@ class Source(PollingSource):
       },
       headers={
         'Content-Type': 'application/vnd.api+json',
-        'X-CSRF-Signature': token,
       },
       json={
         'data': {
