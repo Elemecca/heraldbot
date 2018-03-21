@@ -21,7 +21,14 @@ from heraldbot.source import PollingSource
 LOG = logging.getLogger('heraldbot')
 
 STREAM_URL = 'https://www.patreon.com/api/stream'
+LOGIN_URL = 'https://www.patreon.com/api/login'
+LOGIN_FORM_URL = 'https://www.patreon.com/login'
 LOGO_URL = 'https://c5.patreon.com/external/logo/downloads_logomark_color_on_coral.png'
+
+
+class InaccessiblePostError(Exception):
+  """The polling process encountered a locked post."""
+
 
 def mangleBody(text):
   h2 = HTML2Text()
@@ -42,13 +49,18 @@ def mangleBody(text):
 
 def convertPost(post, author):
   title = post['attributes']['title']
+
+  body = None
+  if 'content' in post['attributes']:
+    body = mangleBody(post['attributes']['content'])
+
   embed = {
     'type': 'rich',
     'color': 0xf96854,
     'url': post['attributes']['url'],
     'title': title if title else 'Community Post',
     'timestamp': post['attributes']['published_at'],
-    'description': mangleBody(post['attributes']['content']),
+    'description': body,
     'author': {
       'name':     author['attributes']['full_name'],
       'url':      author['attributes']['url'],
@@ -76,44 +88,73 @@ class Source(PollingSource):
     super().__init__(config=config, **kwargs)
 
     self.creator_id = config['patreon.creator_id']
+    self.username = config['patreon.username']
+    self.password = config['patreon.password']
 
     self.http = aiohttp.ClientSession(
       connector=http_con,
       conn_timeout=15,
       read_timeout=60,
       raise_for_status=True,
-      cookies={'session_id': config['patreon.session_id']},
     )
 
 
   async def prepare(self):
-    pass
+    await self._login()
+
+  async def _login(self):
+    # fetch the login form HTML to get a CSRF token
+    form = await self.http.get(LOGIN_FORM_URL)
+    form_body = await form.text()
+    form_match = re.search(r'csrfSignature\s*=\s*"([^"]+)"', form_body)
+    if not form_match:
+      raise Exception("login form does not contain CSRF token")
+    token = form_match.group(1)
+
+    # submit the login request - will raise on failure
+    await self.http.post(
+      LOGIN_URL,
+      params={
+        'json-api-version': '1.0',
+      },
+      headers={
+        'Content-Type': 'application/vnd.api+json',
+        'X-CSRF-Signature': token,
+      },
+      json={
+        'data': {
+          'type': 'user',
+          'attributes': {
+            'email': self.username,
+            'password': self.password,
+          },
+        },
+      }
+    )
 
 
   async def poll(self):
     try:
-      await self._poll(creatorPosts=True)
+      try:
+        await self._poll(creatorPosts=True)
+        await self._poll(creatorPosts=False)
+
+      except InaccessiblePostError:
+        await self._login()
+        await self._poll(retry=True, creatorPosts=True)
+        await self._poll(retry=True, creatorPosts=False)
+
     except:
-      LOG.exception(
-        "[%s] failed polling %s for creator posts",
-        self.name, self.TYPE
-      )
-
-    try:
-      await self._poll(creatorPosts=False)
-    except:
-      LOG.exception(
-        "[%s] failed polling %s for community posts",
-        self.name, self.TYPE
-      )
+      LOG.exception("[%s] failed polling %s", self.name, self.TYPE)
 
 
-  async def _poll(self, creatorPosts=True):
+  async def _poll(self, creatorPosts=True, retry=False):
     resp = await self.http.get(STREAM_URL, params={
       'include': 'user',
       'fields[post]': ','.join([
         'title',
         'published_at',
+        'current_user_can_view',
         'content',
         'image',
         'url',
@@ -125,9 +166,12 @@ class Source(PollingSource):
       ]),
       'filter[creator_id]': self.creator_id,
       'filter[is_by_creator]': 'true' if creatorPosts else 'false',
+      'filter[contains_exclusive_posts]': 'true',
       'json-api-use-default-includes': 'false',
       'json-api-version': '1.0',
     })
+
+    LOG.debug("[%s] fetched %s", self.name, resp.url)
 
     body = await resp.json(content_type='application/vnd.api+json')
 
@@ -144,6 +188,11 @@ class Source(PollingSource):
       )
 
       if await self.should_handle(id, timestamp):
+        if not post['attributes']['current_user_can_view'] and not retry:
+          raise InaccessiblePostError()
+
+        LOG.info("[%s] announcing post %s", self.name, str(id))
+
         user = next(
           inc for inc in body['included']
             if inc['type'] == 'user'

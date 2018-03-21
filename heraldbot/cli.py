@@ -48,7 +48,7 @@ def main():
     format = "%(asctime)s [%(name)s] %(levelname)s: %(message)s",
   )
 
-  config = configparser.ConfigParser()
+  config = configparser.ConfigParser(interpolation=None)
   try:
     LOG.info("loading config file '%s'", args.config)
     with open(args.config, 'r') as stream:
