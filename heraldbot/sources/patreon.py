@@ -64,11 +64,8 @@ def convertPost(post, author):
   }
 
   if (post['attributes']['image']):
-    embed['thumbnail'] = {
-      'url':    post['attributes']['image']['large_url'],
-      'height': post['attributes']['image']['height'],
-      'width':  post['attributes']['image']['width'],
-    }
+    image = post['attributes']['image']
+    embed['thumbnail'] = {'url': image['large_url']}
 
   return embed
 
