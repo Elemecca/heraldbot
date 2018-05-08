@@ -235,6 +235,9 @@ class Source(PollingSource):
 
     body = await resp.json(content_type='application/vnd.api+json')
 
+    if 'included' not in body:
+      return
+
     for post in body['included']:
       if post['type'] != 'monocle-clip':
         continue
