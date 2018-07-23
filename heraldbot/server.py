@@ -37,7 +37,7 @@ class BotServer(object):
       keepalive_timeout=0,
     )
 
-    sources = []
+    self.sources = []
     for name in self.config.sections():
       section = self.config[name]
 
@@ -60,9 +60,9 @@ class BotServer(object):
         http_con=self.http_con,
       )
       self.loop.create_task(source.run())
-      sources.append(source)
+      self.sources.append(source)
 
-    if not sources:
+    if not self.sources:
       LOG.error("no valid source configurations; shutting down")
       return self.stop(status=1)
 
@@ -70,7 +70,11 @@ class BotServer(object):
     self.loop.set_exception_handler(self._error)
     self.loop.create_task(self._prepare())
     self.loop.run_forever()
+    self.loop.run_until_complete(self._shutdown())
     sys.exit(self.exit_status)
+
+  async def _shutdown(self):
+    await asyncio.wait([source.stop() for source in self.sources])
 
   def _error(self, loop, context):
     loop.default_exception_handler(context)

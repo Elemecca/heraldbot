@@ -13,6 +13,7 @@ import aiohttp
 import datetime
 from html2text import HTML2Text
 import logging
+import os
 import re
 import textwrap
 
@@ -116,9 +117,15 @@ class Source(PollingSource):
     self.monocle_id = config['patreon.monocle_id']
     self.username = config['patreon.username']
     self.password = config['patreon.password']
+    self.cookie_path = config['patreon.cookie_jar']
+
+    self.cookie_jar = aiohttp.CookieJar()
+    if self.cookie_path and os.path.exists(self.cookie_path):
+      self.cookie_jar.load(self.cookie_path)
 
     self.http = aiohttp.ClientSession(
       connector=http_con,
+      cookie_jar=self.cookie_jar,
       conn_timeout=15,
       read_timeout=60,
       raise_for_status=True,
@@ -127,6 +134,10 @@ class Source(PollingSource):
 
   async def prepare(self):
     await self._login()
+
+  async def stop(self):
+    if self.cookie_path:
+      self.cookie_jar.save(self.cookie_path)
 
   async def _login(self):
     await self.http.post(
