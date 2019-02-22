@@ -37,6 +37,8 @@ class PollingSource(object):
         seconds=config.getint('max_age_seconds', 0),
       )
 
+    self.mark_all = config.getboolean('mark_all_handled', False)
+
 
   async def run(self):
     LOG.info(
@@ -74,6 +76,14 @@ class PollingSource(object):
       return False
 
     if await self.redis.get(self._redisKey(id)):
+      return False
+
+    if self.mark_all:
+      LOG.info(
+        "[%s] mark_all_handled %s from %s",
+        self.name, str(id), timestamp.isoformat()
+      )
+      await self.mark_handled(id, timestamp)
       return False
 
     return True
