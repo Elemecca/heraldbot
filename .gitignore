@@ -5,6 +5,8 @@ __pycache__/
 # Python build output
 /heraldbot.egg-info/
 /.virtualenv/
+/.venv/
 
 # config files for testing
 /*.cfg
+/cookies

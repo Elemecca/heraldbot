@@ -10,14 +10,11 @@
 # <http://creativecommons.org/publicdomain/zero/1.0/>.
 
 import aiohttp
-import datetime
-from html2text import HTML2Text
 import logging
 import os
-import re
-import textwrap
 
 from heraldbot.source import PollingSource
+from heraldbot import util
 
 LOG = logging.getLogger('heraldbot')
 
@@ -33,36 +30,13 @@ class InaccessiblePostError(Exception):
   """The polling process encountered a locked post."""
 
 
-def parseDate(value):
-  """parses an RFC 3339 / ISO 8601 date string"""
-  # uses regexes to compensate for strptime's shortcomings
-
-  # convert the `Z` timezone spec to `+0000`
-  value = re.sub(r'Z$', '+0000', value)
-
-  # strip all optional separators (colon, hyphen before T)
-  value = re.sub(r':|-(?=.*T)', '', value)
-
-  # add microseconds if missing
-  value = re.sub(r'(?<!\.\d{6})(?=[+-])', '.000000', value)
-
-  return datetime.datetime.strptime(value, '%Y%m%dT%H%M%S.%f%z')
-
-
-def mangleBody(text):
-  h2 = HTML2Text()
-  h2.body_width = None
-  h2.ignore_links = True
-  h2.ignore_images = True
-
-  return textwrap.shorten(h2.handle(text), width=250)
 
 def convertPost(post, author):
   title = post['attributes']['title']
 
   body = None
   if 'content' in post['attributes']:
-    body = mangleBody(post['attributes']['content'])
+    body = util.html_to_summary(post['attributes']['content'])
 
   embed = {
     'type': 'rich',
@@ -210,7 +184,7 @@ class Source(PollingSource):
 
     for post in body['data']:
       id = post['id']
-      timestamp = parseDate(post['attributes']['published_at'])
+      timestamp = util.parse_3339(post['attributes']['published_at'])
 
       if await self.should_handle(id, timestamp):
         if not post['attributes']['current_user_can_view'] and not retry:
@@ -254,7 +228,7 @@ class Source(PollingSource):
         continue
 
       id = 'monocle.' + post['id']
-      timestamp = parseDate(post['attributes']['published_at'])
+      timestamp = util.parse_3339(post['attributes']['published_at'])
 
       if await self.should_handle(id, timestamp):
         if not post['attributes']['viewing_url'] and not retry:
