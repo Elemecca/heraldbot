@@ -10,8 +10,8 @@
 # <http://creativecommons.org/publicdomain/zero/1.0/>.
 
 import aiohttp
-from email.utils import parsedate_to_datetime
 import logging
+import re
 import xml.etree.ElementTree as ET
 
 from heraldbot.source import PollingSource
@@ -21,10 +21,6 @@ LOG = logging.getLogger('heraldbot')
 
 DREAMWIDTH_RED = 0xC1272D
 LOGO_URL = 'https://www.dreamwidth.org/img/comm_staff.png'
-NS = {
-  'a': 'http://www.w3.org/2005/Atom',
-  'dw': 'https://www.dreamwidth.org',
-}
 
 class Source(PollingSource):
   TYPE = "Dreamwidth"
@@ -32,7 +28,7 @@ class Source(PollingSource):
   def __init__(self, config=None, http_con=None, **kwargs):
     super().__init__(config=config, **kwargs)
 
-    self.feed_url = config['dreamwidth.atom_url']
+    self.feed_url = config['dreamwidth.rss_url']
 
     self.http = aiohttp.ClientSession(
       connector=http_con,
@@ -48,26 +44,41 @@ class Source(PollingSource):
     pass
 
   async def poll(self):
-    LOG.debug('dreamwidth poll called')
     resp = await self.http.get(self.feed_url)
-    feed = ET.fromstring(await resp.text());
+    feed = ET.fromstring(await resp.text()).find('channel');
 
     LOG.debug("[%s] fetched %s", self.name, resp.url)
 
-    for entry in feed.findall('a:entry', NS):
-      id = entry.find('a:id', NS).text
-      timestamp = util.parse_3339(entry.find('a:published', NS).text)
+    author_name = feed.find('title').text
+    author_url = feed.find('link').text
+    author_image = feed.find('image').find('url').text
+
+    for entry in feed.findall('item'):
+      guid = entry.find('guid').text
+      match = re.fullmatch(r'https?://([^./]+)\.dreamwidth\.org/(\d+)\.html', guid)
+      if not match:
+        raise Error("invalid post guid format '" + guid + "'")
+
+      id = match.group(1) + '.' + match.group(2)
+      timestamp = util.parse_2822(entry.find('pubDate').text)
 
       if await self.should_handle(id, timestamp):
-        LOG.info("[%s] announcing post %s", self.name, str(id))
+        LOG.info("[%s] announcing post %s", self.name, id)
+
+        content = entry.find('description').text
 
         embed = {
           'type': 'rich',
           'color': DREAMWIDTH_RED,
-          'url': entry.find('./a:link[@type="text/html"]', NS).get('href'),
-          'title': entry.find('a:title', NS).text,
-          'timestamp': entry.find('a:published', NS).text,
-          'description': util.html_to_summary(entry.find('a:content', NS).text),
+          'author': {
+            'name': author_name,
+            'url': author_url,
+            'icon_url': author_image,
+          },
+          'url': entry.find('link').text,
+          'title': entry.find('title').text,
+          'timestamp': timestamp.isoformat(),
+          'description': util.html_to_summary(content),
           'footer': {
             'text': 'Dreamwidth',
             'icon_url': LOGO_URL,

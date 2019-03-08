@@ -10,6 +10,7 @@
 # <http://creativecommons.org/publicdomain/zero/1.0/>.
 
 import datetime
+import email.utils
 from html2text import HTML2Text
 import re
 import textwrap
@@ -30,6 +31,9 @@ def parse_3339(value):
 
   return datetime.datetime.strptime(value, '%Y%m%dT%H%M%S.%f%z')
 
+def parse_2822(value):
+  """parses an RFC 2822 (email, HTTP, RSS) date string"""
+  return email.utils.parsedate_to_datetime(value)
 
 def html_to_summary(text):
   """converts an HTML document to a short summary"""
