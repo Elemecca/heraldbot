@@ -66,6 +66,10 @@ class Source(PollingSource):
         LOG.info("[%s] announcing post %s", self.name, id)
 
         content = entry.find('description').text
+        text = util.html_to_summary(content)
+        image = util.html_get_image(content)
+
+        text = re.sub(r'\s*comments\s*$', '', text)
 
         embed = {
           'type': 'rich',
@@ -78,12 +82,15 @@ class Source(PollingSource):
           'url': entry.find('link').text,
           'title': entry.find('title').text,
           'timestamp': timestamp.isoformat(),
-          'description': util.html_to_summary(content),
+          'description': text,
           'footer': {
             'text': 'Dreamwidth',
             'icon_url': LOGO_URL,
           },
         }
+
+        if image is not None:
+          embed['thumbnail'] = { 'url': image }
 
         await self.discord.send(embed=embed)
         await self.mark_handled(id, timestamp)

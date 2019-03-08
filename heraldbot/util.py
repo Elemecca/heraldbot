@@ -11,6 +11,7 @@
 
 import datetime
 import email.utils
+from html.parser import HTMLParser
 from html2text import HTML2Text
 import re
 import textwrap
@@ -43,3 +44,16 @@ def html_to_summary(text):
   h2.ignore_images = True
 
   return textwrap.shorten(h2.handle(text), width=250)
+
+def html_get_image(text):
+  class ImageFetchParser(HTMLParser):
+    image = None
+    def handle_starttag(self, tag, attrs):
+      if self.image is None and tag == 'img':
+        src = next(iter([ a[1] for a in attrs if a[0] == 'src' ]))
+        if src and '/tools/commentcount' not in src:
+          self.image = src
+
+  parser = ImageFetchParser()
+  parser.feed(text)
+  return parser.image
