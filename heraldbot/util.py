@@ -41,7 +41,7 @@ def html_to_summary(text):
   h2 = HTML2Text()
   h2.body_width = None
   h2.ignore_links = True
-  h2.ignore_images = True
+  h2.images_to_alt = True
 
   return textwrap.shorten(h2.handle(text), width=250)
 

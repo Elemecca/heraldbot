@@ -69,7 +69,7 @@ class Source(PollingSource):
         text = util.html_to_summary(content)
         image = util.html_get_image(content)
 
-        text = re.sub(r'\s*comments\s*$', '', text)
+        text = re.sub(r'\s*comment\s+count\s+unavailable\s+comments\s*$', '', text)
 
         embed = {
           'type': 'rich',
