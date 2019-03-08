@@ -67,8 +67,6 @@ class Source(PollingSource):
 
         content = entry.find('description').text
         text = util.html_to_summary(content)
-        image = util.html_get_image(content)
-
         text = re.sub(r'\s*comment\s+count\s+unavailable\s+comments\s*$', '', text)
 
         embed = {
@@ -89,7 +87,8 @@ class Source(PollingSource):
           },
         }
 
-        if image is not None:
+        image = util.html_get_image(content)
+        if image and '/tools/commentcount' not in image:
           embed['thumbnail'] = { 'url': image }
 
         await self.discord.send(embed=embed)

@@ -51,7 +51,7 @@ def html_get_image(text):
     def handle_starttag(self, tag, attrs):
       if self.image is None and tag == 'img':
         src = next(iter([ a[1] for a in attrs if a[0] == 'src' ]))
-        if src and '/tools/commentcount' not in src:
+        if src:
           self.image = src
 
   parser = ImageFetchParser()
