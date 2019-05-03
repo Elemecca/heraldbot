@@ -18,6 +18,7 @@ from heraldbot import util
 
 LOG = logging.getLogger('heraldbot')
 
+CAMPAIGN_URL   = 'https://www.patreon.com/api/campaigns/'
 STREAM_URL     = 'https://www.patreon.com/api/stream'
 MONOCLE_URL    = 'https://www.patreon.com/api/monocle-channels/'
 LOGIN_URL      = 'https://www.patreon.com/api/login'
@@ -63,7 +64,7 @@ def convertPost(post, author):
   return embed
 
 
-def convertLens(post):
+def convertLens(post, campaign):
   embed = {
     'type': 'rich',
     'color': PATREON_ORANGE,
@@ -72,6 +73,11 @@ def convertLens(post):
     'timestamp': post['attributes']['published_at'],
     'thumbnail': {'url': post['attributes']['thumbnail_url']},
     'url': post['attributes']['viewing_url'],
+    'author': {
+      'name':     campaign['name'],
+      'url':      campaign['url'],
+      'icon_url': campaign['avatar_photo_url'],
+    },
     'footer': {
       'text': 'Patreon',
       'icon_url': LOGO_URL,
@@ -87,8 +93,7 @@ class Source(PollingSource):
   def __init__(self, config=None, http_con=None, **kwargs):
     super().__init__(config=config, **kwargs)
 
-    self.creator_id = config['patreon.creator_id']
-    self.monocle_id = config['patreon.monocle_id']
+    self.campaign_id = config['patreon.campaign_id']
     self.username = config['patreon.username']
     self.password = config['patreon.password']
     self.cookie_path = config['patreon.cookie_jar']
@@ -136,26 +141,45 @@ class Source(PollingSource):
 
   async def poll(self):
     try:
+      resp = await self.http.get(CAMPAIGN_URL + self.campaign_id, params={
+        'include': ','.join([
+          'channel',
+          'creator',
+        ]),
+        'fields[campaign]': ','.join([
+          'name',
+          'avatar_photo_url',
+          'url',
+        ]),
+        'fields[user]': '',
+        'fields[monocle-channel]': '',
+        'json-api-use-default-includes': 'false',
+        'json-api-version': '1.0',
+      })
+
+      LOG.debug("[%s] fetched %s", self.name, resp.url)
+      body = await resp.json(content_type='application/vnd.api+json')
+
+      campaign = body['data']['attributes']
+      creator_id = body['data']['relationships']['creator']['data']['id']
+      channel_id = body['data']['relationships']['channel']['data']['id']
+
       try:
-        if self.creator_id is not None:
-          await self._pollStream(creatorPosts=True)
-          await self._pollStream(creatorPosts=False)
-        if self.monocle_id is not None:
-          await self._pollMonocle()
+        await self._pollStream(creator_id, creatorPosts=True)
+        await self._pollStream(creator_id, creatorPosts=False)
+        await self._pollMonocle(channel_id, campaign)
 
       except InaccessiblePostError:
         await self._login()
-        if self.creator_id is not None:
-          await self._pollStream(retry=True, creatorPosts=True)
-          await self._pollStream(retry=True, creatorPosts=False)
-        if self.monocle_id is not None:
-          await self._pollMonocle(retry=True)
+        await self._pollStream(creator_id, retry=True, creatorPosts=True)
+        await self._pollStream(creator_id, retry=True, creatorPosts=False)
+        await self._pollMonocle(channel_id, campaign, retry=True)
 
     except:
       LOG.exception("[%s] failed polling %s", self.name, self.TYPE)
 
 
-  async def _pollStream(self, creatorPosts=True, retry=False):
+  async def _pollStream(self, creator_id, creatorPosts=True, retry=False):
     resp = await self.http.get(STREAM_URL, params={
       'include': 'user',
       'fields[post]': ','.join([
@@ -171,7 +195,7 @@ class Source(PollingSource):
         'image_url',
         'url',
       ]),
-      'filter[creator_id]': self.creator_id,
+      'filter[creator_id]': creator_id,
       'filter[is_by_creator]': 'true' if creatorPosts else 'false',
       'filter[contains_exclusive_posts]': 'true',
       'json-api-use-default-includes': 'false',
@@ -203,8 +227,8 @@ class Source(PollingSource):
         await self.mark_handled(id, timestamp)
 
 
-  async def _pollMonocle(self, retry=False):
-    resp = await self.http.get(MONOCLE_URL + self.monocle_id, params={
+  async def _pollMonocle(self, channel_id, campaign, retry=False):
+    resp = await self.http.get(MONOCLE_URL + channel_id, params={
       'include': 'story',
       'fields[monocle-clip]': ','.join([
         'clip_type',
@@ -236,7 +260,7 @@ class Source(PollingSource):
 
         LOG.info("[%s] announcing lens %s", self.name, str(id))
 
-        message = convertLens(post)
+        message = convertLens(post, campaign)
 
         await self.discord.send(embed=message)
         await self.mark_handled(id, timestamp)
