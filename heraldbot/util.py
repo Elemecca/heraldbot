@@ -20,6 +20,7 @@ import textwrap
 def parse_3339(value):
   """parses an RFC 3339 / ISO 8601 date string"""
   # uses regexes to compensate for strptime's shortcomings
+  raw = value
 
   # convert the `Z` timezone spec to `+0000`
   value = re.sub(r'Z$', '+0000', value)
@@ -28,9 +29,13 @@ def parse_3339(value):
   value = re.sub(r':|-(?=.*T)', '', value)
 
   # add microseconds if missing
-  value = re.sub(r'(?<!\.\d{6})(?=[+-])', '.000000', value)
+  if not re.search(r'\.\d+(?=[+-])', value):
+      value = re.sub(r'(?=[+-])', '.000000', value)
 
-  return datetime.datetime.strptime(value, '%Y%m%dT%H%M%S.%f%z')
+  try:
+    return datetime.datetime.strptime(value, '%Y%m%dT%H%M%S.%f%z')
+  except ValueError as cause:
+    raise ValueError("invalid 3339 value '" + raw + "'") from cause
 
 def parse_2822(value):
   """parses an RFC 2822 (email, HTTP, RSS) date string"""
