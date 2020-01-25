@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+
+  "compilerOptions": {
+    "module": "None",
+    "target": "ES2019",
+
+    "lib": [
+      "ES2019",
+      "DOM"
+    ],
+
+    "types": [],
+
+    "alwaysStrict": false
+  }
+}

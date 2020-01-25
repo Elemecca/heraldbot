@@ -8,7 +8,8 @@
   "private": true,
   "scripts": {
     "build": "tsc --build",
-    "watch": "tsc --build --watch"
+    "watch": "tsc --build --watch",
+    "server": "node build/server/index.js"
   },
   "dependencies": {
     "selenium-webdriver": "^4.0.0-alpha.5"
