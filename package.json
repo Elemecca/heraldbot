@@ -1,0 +1,22 @@
+{
+  "name": "heraldbot",
+  "version": "2.0.0",
+  "description": "A Discord notification bot for the Jaguar Holt.",
+  "author": "Sam Hanes <sam@maltera.com>",
+  "repository": "github:elemecca/heraldbot",
+  "license": "Apache-2.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc --build",
+    "watch": "tsc --build --watch"
+  },
+  "dependencies": {
+    "selenium-webdriver": "^4.0.0-alpha.5"
+  },
+  "devDependencies": {
+    "@types/node": "^13.5.0",
+    "@types/selenium-webdriver": "^4.0.6",
+    "dotenv": "^8.2.0",
+    "typescript": "^3.7.5"
+  }
+}
